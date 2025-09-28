@@ -4,6 +4,7 @@ from icalendar import Calendar
 import pytz
 from dateutil.rrule import rrulestr
 import re
+import os
 
 # -----------------------------
 # Fetch ICS
@@ -51,7 +52,7 @@ def parse_events(cal, start_range=None, end_range=None):
         if rrule_val:
             # Build RRULE string
             rrule_str_full = ";".join([f"{k}={v[0]}" for k, v in rrule_val.items() if str(v[0])])
-            # Remove unsupported tokens (like numeric-only "15")
+            # Remove unsupported numeric-only properties
             rrule_str_clean = re.sub(r'(?:^|;)\d+=\d+', '', rrule_str_full)
 
             try:
@@ -74,7 +75,6 @@ def parse_events(cal, start_range=None, end_range=None):
                     })
             except Exception as e:
                 print(f"Warning: Skipping unsupported RRULE for event '{summary}': {e}")
-                # fallback: include the original single event
                 events.append({
                     "summary": summary,
                     "location": location,
@@ -178,42 +178,33 @@ def generate_html(events, start_of_week):
 # Main
 # -----------------------------
 def main():
-    import os
     url = os.environ.get("CALENDAR_ICS_URL")
     if not url:
-        print("Warning: CALENDAR_ICS_URL environment variable not set. Creating empty calendar.")
+        print("Warning: CALENDAR_ICS_URL not set. Generating empty calendar.")
         cal = None
     else:
         try:
             cal = fetch_calendar(url)
         except Exception as e:
-            print(f"Error fetching ICS calendar: {e}")
+            print(f"Error fetching ICS: {e}")
             cal = None
 
     now = datetime.datetime.now(pytz.timezone("Asia/Singapore"))
-
-    # Expand events for this week
-    weekday = now.weekday()
-    days_to_sunday = (weekday + 1) % 7
-    start_of_week = (now - datetime.timedelta(days=days_to_sunday)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    end_of_week = start_of_week + datetime.timedelta(days=6, hours=23, minutes=59, seconds=59)
 
     # Parse events
     events = []
     if cal:
         try:
-            events = parse_events(cal, start_of_week, end_of_week)
+            events = parse_events(cal, now, now + datetime.timedelta(days=7))
         except Exception as e:
             print(f"Error parsing events: {e}")
 
-    # Filter events for the week
+    # Filter for the current week
     try:
         week_events, start_of_week = filter_week(events, now)
     except Exception as e:
-        print(f"Error filtering week events: {e}")
-        week_events, start_of_week = [], start_of_week
+        print(f"Error filtering week: {e}")
+        week_events, start_of_week = [], now
 
     # Generate HTML
     try:
@@ -222,9 +213,9 @@ def main():
         print(f"Error generating HTML: {e}")
         html = "<html><body><h1>Error generating calendar</h1></body></html>"
 
-    # Write to file
+    # Write to repo root explicitly
+    fpath = os.path.abspath(os.path.join(os.getcwd(), "calendar.html"))
     try:
-        fpath = "calendar.html"
         print(f"Writing calendar.html to {fpath} ...")
         with open(fpath, "w", encoding="utf-8") as f:
             f.write(html)
