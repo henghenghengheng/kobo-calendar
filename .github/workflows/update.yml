@@ -3,7 +3,7 @@ name: Update and Deploy Weekly Calendar
 on:
   schedule:
     - cron: "0 0 * * 0"   # every Sunday at 00:00 UTC
-  workflow_dispatch:       # allow manual run
+  workflow_dispatch:       # allow manual trigger
 
 jobs:
   build-and-deploy:
@@ -30,7 +30,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./         # root contains index.html
+          publish_dir: ./          # root contains index.html
           publish_branch: gh-pages
           user_name: github-actions[bot]
           user_email: github-actions[bot]@users.noreply.github.com
