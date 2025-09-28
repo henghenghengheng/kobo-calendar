@@ -1,91 +1,84 @@
-import os
 import datetime
 import requests
-import pytz
 from icalendar import Calendar
+import pytz
 
-# ------------------------------
-# Configuration
-# ------------------------------
-CALENDAR_ICS_URL = os.environ.get("CALENDAR_ICS_URL")  # Google Calendar ICS URL
-OUTPUT_HTML = "calendar.html"
+# -----------------------------
+# Fetch ICS
+# -----------------------------
+def fetch_calendar(url):
+    print("Fetching ICS calendar...")
+    r = requests.get(url)
+    print(f"ICS fetch status code: {r.status_code}")
+    r.raise_for_status()
+    return Calendar.from_ical(r.text)
 
-# ------------------------------
-# Helper functions
-# ------------------------------
-def fetch_ics(url):
-    response = requests.get(url)
-    print("ICS fetch status code:", response.status_code)
-    response.raise_for_status()
-    return Calendar.from_ical(response.text)
-
-def to_naive_utc(dt):
-    """Convert datetime or date to naive UTC datetime"""
-    if isinstance(dt, datetime.date) and not isinstance(dt, datetime.datetime):
-        dt = datetime.datetime.combine(dt, datetime.time())
-    if dt.tzinfo is not None:
-        dt = dt.astimezone(pytz.UTC).replace(tzinfo=None)
-    return dt
-
-def get_sunday_start(dt):
-    """Get Sunday at 00:00:00 of the current week"""
-    dt = to_naive_utc(dt)
-    days_to_sunday = (dt.weekday() + 1) % 7  # Monday=0 ... Sunday=6
-    sunday = dt - datetime.timedelta(days=days_to_sunday)
-    return datetime.datetime.combine(sunday.date(), datetime.time(0, 0))
-
+# -----------------------------
+# Parse events
+# -----------------------------
 def parse_events(cal):
+    print("Parsing events...")
     events = []
     for component in cal.walk():
-        if component.name != "VEVENT":
-            continue
+        if component.name == "VEVENT":
+            summary = str(component.get("summary"))
+            location = str(component.get("location", ""))
+            dtstart = component.get("dtstart").dt
+            dtend = component.get("dtend").dt
+            all_day = False
 
-        start_prop = component.get('dtstart')
-        end_prop = component.get('dtend')
+            # Handle all-day events (date vs datetime)
+            if isinstance(dtstart, datetime.date) and not isinstance(dtstart, datetime.datetime):
+                all_day = True
+                dtstart = datetime.datetime.combine(dtstart, datetime.time.min)
+            if isinstance(dtend, datetime.date) and not isinstance(dtend, datetime.datetime):
+                all_day = True
+                dtend = datetime.datetime.combine(dtend, datetime.time.min)
 
-        if start_prop is None:
-            continue
-
-        start = start_prop.dt
-        end = end_prop.dt if end_prop else start + datetime.timedelta(hours=1)
-
-        all_day = False
-        if isinstance(start, datetime.date) and not isinstance(start, datetime.datetime):
-            start = datetime.datetime.combine(start, datetime.time())
-            end = datetime.datetime.combine(end, datetime.time())
-            all_day = True
-
-        start = to_naive_utc(start)
-        end = to_naive_utc(end)
-
-        location = component.get('location')
-        events.append({
-            'summary': str(component.get('summary', 'No Title')),
-            'start': start,
-            'end': end,
-            'all_day': all_day,
-            'location': str(location) if location else ''
-        })
-
+            # Keep timezone if available
+            events.append({
+                "summary": summary,
+                "location": location,
+                "start": dtstart,
+                "end": dtend,
+                "all_day": all_day
+            })
+            print(f"{summary}: {dtstart} → {dtend}, all_day={all_day}")
     print(f"Total events parsed: {len(events)}")
-    for e in events[:5]:
-        print(f"{e['summary']}: {e['start']} → {e['end']}, all_day={e['all_day']}")
     return events
 
+# -----------------------------
+# Filter events for the current week (Sunday → Saturday)
+# -----------------------------
 def filter_week(events, reference_date=None):
     if reference_date is None:
-        reference_date = datetime.datetime.utcnow()
-    reference_date = to_naive_utc(reference_date)
-    start_of_week = get_sunday_start(reference_date)
+        reference_date = datetime.datetime.now(pytz.UTC)
+    else:
+        if reference_date.tzinfo is None:
+            reference_date = reference_date.replace(tzinfo=pytz.UTC)
+
+    weekday = reference_date.weekday()  # Monday=0 ... Sunday=6
+    days_to_sunday = (weekday + 1) % 7
+    sunday = reference_date - datetime.timedelta(days=days_to_sunday)
+    start_of_week = sunday.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_week = start_of_week + datetime.timedelta(days=7)
 
     week_events = []
     for e in events:
-        if e['end'] > start_of_week and e['start'] < end_of_week:
+        e_start = e['start']
+        e_end = e['end']
+
+        # Make timezone-aware if naive
+        if e_start.tzinfo is None:
+            e_start = e_start.replace(tzinfo=pytz.UTC)
+        if e_end.tzinfo is None:
+            e_end = e_end.replace(tzinfo=pytz.UTC)
+
+        if e_end > start_of_week and e_start < end_of_week:
             e_copy = e.copy()
-            if e_copy['start'] < start_of_week:
+            if e_start < start_of_week:
                 e_copy['start'] = start_of_week
-            if e_copy['end'] > end_of_week:
+            if e_end > end_of_week:
                 e_copy['end'] = end_of_week
             week_events.append(e_copy)
 
@@ -94,109 +87,63 @@ def filter_week(events, reference_date=None):
         print(f"- {e['summary']}: {e['start']} → {e['end']}")
     return week_events, start_of_week
 
-# ------------------------------
-# HTML generation (visual timetable)
-# ------------------------------
+# -----------------------------
+# Generate HTML (week view)
+# -----------------------------
 def generate_html(events, start_of_week):
     days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
-    events_by_day = {i: [] for i in range(7)}
-    for e in events:
-        weekday = e['start'].weekday()
-        events_by_day[weekday].append(e)
-
-    all_day_by_day = {i: [] for i in range(7)}
-    timed_by_day = {i: [] for i in range(7)}
+    html = ['<html><head><style>']
+    html.append('body{font-family:sans-serif;}')
+    html.append('.week{display:flex;}')
+    html.append('.day{flex:1; border:1px solid #ccc; min-height:500px; position:relative;}')
+    html.append('.all_day{background:#f9c74f; margin:2px; padding:2px;}')
+    html.append('.event{background:#90be6d; margin:2px; padding:2px; position:absolute;}')
+    html.append('.header{background:#f94144; color:white; text-align:center; padding:2px;}')
+    html.append('</style></head><body>')
+    html.append('<div class="week">')
     for i in range(7):
-        for e in events_by_day[i]:
-            if e['all_day']:
-                all_day_by_day[i].append(e)
-            else:
-                timed_by_day[i].append(e)
+        day_date = start_of_week + datetime.timedelta(days=i)
+        html.append(f'<div class="day"><div class="header">{days[i]} {day_date.day}</div>')
 
-    # Determine hour range
-    min_hour = 24
-    max_hour = 0
-    for i in range(7):
-        for e in timed_by_day[i]:
-            min_hour = min(min_hour, e['start'].hour)
-            max_hour = max(max_hour, e['end'].hour + 1)
-    if min_hour >= max_hour:
-        min_hour = 0
-        max_hour = 24
+        # all-day events first
+        y_offset = 30  # start y for timed events
+        for e in events:
+            if e['all_day'] and e['start'].date() <= day_date.date() <= e['end'].date():
+                html.append(f'<div class="all_day">{e["summary"]}</div>')
 
-    hour_height = 60  # px per hour
-    all_day_height = 30
+        # timed events
+        for e in events:
+            if not e['all_day'] and e['start'].date() == day_date.date():
+                # Compute top and height (example: 8:00=8*30 px)
+                top = e['start'].hour * 30 + e['start'].minute * 0.5 + y_offset
+                height = max(20, ((e['end'] - e['start']).seconds / 60) * 0.5)
+                html.append(f'<div class="event" style="top:{top}px; height:{height}px;">'
+                            f'{e["summary"]}<br>'
+                            f'{e["start"].strftime("%H:%M")} - {e["end"].strftime("%H:%M")}<br>'
+                            f'{e["location"]}</div>')
 
-    html = f"""
-<html>
-<head>
-<meta charset='utf-8'>
-<title>Weekly Calendar</title>
-<style>
-body {{font-family: sans-serif; margin:0; padding:0;}}
-table {{border-collapse: collapse; width: 100%; table-layout: fixed;}}
-th, td {{border: 1px solid #999; vertical-align: top; position: relative; padding:0;}}
-.day-header {{height: 40px; text-align: center; background:#eee;}}
-.hour-label {{position:absolute; left:0; width:30px; text-align:right; font-size:12px; padding-right:2px;}}
-.event {{position:absolute; left:0; right:0; margin:1px; padding:2px; background:#8cf; border:1px solid #38a; font-size:12px; overflow:hidden;}}
-.all-day-event {{background:#fc8; border:1px solid #c83; font-size:12px; margin:1px; padding:2px;}}
-.td-container {{position:relative; height: {(max_hour-min_hour)*hour_height + all_day_height}px;}}
-</style>
-</head>
-<body>
-<table>
-<tr>
-"""
-    # Header row
-    for i in range(7):
-        day_date = (start_of_week + datetime.timedelta(days=i)).day
-        html += f"<th class='day-header'>{days[i]} {day_date}</th>"
-    html += "</tr>\n<tr>"
+        html.append('</div>')
+    html.append('</div></body></html>')
+    return "\n".join(html)
 
-    # Table cells per day
-    for i in range(7):
-        html += "<td><div class='td-container'>\n"
-        # All-day events
-        y_offset = 0
-        for e in all_day_by_day[i]:
-            html += f"<div class='all-day-event' style='top:{y_offset}px;'>{e['summary']}</div>\n"
-            y_offset += all_day_height
-        # Timed events
-        for e in timed_by_day[i]:
-            start_offset = ((e['start'].hour + e['start'].minute/60) - min_hour) * hour_height + all_day_height
-            end_offset = ((e['end'].hour + e['end'].minute/60) - min_hour) * hour_height + all_day_height
-            height = max(end_offset - start_offset, 15)
-            html += f"<div class='event' style='top:{start_offset}px; height:{height}px;'>"
-            html += f"{e['summary']}<br>{e['start'].strftime('%H:%M')} - {e['end'].strftime('%H:%M')}<br>"
-            if e['location']:
-                html += f"{e['location']}"
-            html += "</div>\n"
-        html += "</div></td>"
-    html += "</tr>\n</table>\n</body>\n</html>"
-    return html
-
-# ------------------------------
+# -----------------------------
 # Main
-# ------------------------------
+# -----------------------------
 def main():
-    if not CALENDAR_ICS_URL:
-        raise ValueError("CALENDAR_ICS_URL environment variable not set")
+    import os
+    url = os.environ.get("CALENDAR_ICS_URL")
+    if not url:
+        print("Error: CALENDAR_ICS_URL environment variable not set.")
+        return
 
-    print("Fetching ICS calendar...")
-    cal = fetch_ics(CALENDAR_ICS_URL)
-
-    print("Parsing events...")
+    cal = fetch_calendar(url)
     events = parse_events(cal)
-
-    print("Filtering events for this week...")
     week_events, start_of_week = filter_week(events)
-
-    print("Generating HTML...")
     html = generate_html(week_events, start_of_week)
 
-    with open(OUTPUT_HTML, 'w', encoding='utf-8') as f:
+    with open("calendar.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Calendar HTML written to {OUTPUT_HTML}")
+    print("Calendar HTML written to calendar.html")
 
 if __name__ == "__main__":
     main()
