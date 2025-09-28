@@ -30,17 +30,31 @@ def parse_events(cal):
     events = []
     for component in cal.walk():
         if component.name == "VEVENT":
-            start = component.get('dtstart').dt
-            end = component.get('dtend').dt
+            start_prop = component.get('dtstart')
+            end_prop = component.get('dtend')
+
+            if start_prop is None:
+                continue  # skip invalid events
+            start = start_prop.dt
+
+            # fallback if dtend missing
+            if end_prop is None:
+                if isinstance(start, datetime.datetime):
+                    end = start + datetime.timedelta(hours=1)
+                else:  # date object
+                    end = start + datetime.timedelta(days=1)
+            else:
+                end = end_prop.dt
+
             all_day = False
             if isinstance(start, datetime.date) and not isinstance(start, datetime.datetime):
-                # all-day event
                 start = datetime.datetime.combine(start, datetime.time())
                 end = datetime.datetime.combine(end, datetime.time())
                 all_day = True
+
             location = component.get('location')
             events.append({
-                'summary': str(component.get('summary')),
+                'summary': str(component.get('summary', 'No Title')),
                 'start': start,
                 'end': end,
                 'all_day': all_day,
@@ -57,7 +71,6 @@ def filter_week(events, reference_date=None):
     week_events = []
     for e in events:
         if e['end'] > start_of_week and e['start'] < end_of_week:
-            # truncate event to the week range
             e_copy = e.copy()
             if e_copy['start'] < start_of_week:
                 e_copy['start'] = start_of_week
@@ -75,7 +88,6 @@ def compute_earliest_latest(events):
     return earliest, latest
 
 def generate_html(events, start_of_week):
-    # Separate all-day and timed events
     all_day_events = [e for e in events if e['all_day']]
     timed_events = [e for e in events if not e['all_day']]
 
@@ -103,7 +115,7 @@ def generate_html(events, start_of_week):
     html.append('<div class="hour-labels">')
     for h in range(int(earliest_hour), int(latest_hour)+1):
         html.append('<div>%02d:00</div>' % h)
-    html.append('</div>')  # close hour-labels
+    html.append('</div>')
 
     # Week columns
     html.append('<div class="week">')
@@ -112,7 +124,7 @@ def generate_html(events, start_of_week):
         html.append('<div class="day-column">')
         html.append('<div class="day-column-header">%s %d</div>' % (day_date.strftime('%a'), day_date.day))
 
-        # all-day events for this day
+        # all-day events
         y_offset = 0
         for e in all_day_events:
             if e['start'].date() <= day_date.date() <= (e['end'] - datetime.timedelta(seconds=1)).date():
@@ -136,9 +148,9 @@ def generate_html(events, start_of_week):
                              end_time.strftime('%H:%M'),
                              '<br><span class="location">%s</span>' % e['location'] if e['location'] else ''))
 
-        html.append('</div>')  # close day-column
-    html.append('</div>')  # close week
-    html.append('</div>')  # close container
+        html.append('</div>')
+    html.append('</div>')
+    html.append('</div>')
     html.append('</body></html>')
 
     return '\n'.join(html)
