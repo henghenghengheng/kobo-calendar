@@ -31,6 +31,7 @@ def parse_events(cal, start_range=None, end_range=None):
         dtend = component.get("dtend").dt
         all_day = False
 
+        # Handle all-day events
         if isinstance(dtstart, datetime.date) and not isinstance(dtstart, datetime.datetime):
             all_day = True
             dtstart = datetime.datetime.combine(dtstart, datetime.time.min)
@@ -47,12 +48,7 @@ def parse_events(cal, start_range=None, end_range=None):
         # Check for recurrence
         rrule_val = component.get("RRULE")
         if rrule_val:
-            rrule_str_full = ""
-            for key, val in rrule_val.items():
-                # Only handle weekly recurrence
-                if key.upper() == "FREQ" and str(val[0]).upper() != "WEEKLY":
-                    continue
-                rrule_str_full += f"{key}={val[0]};"
+            rrule_str_full = ";".join([f"{k}={v[0]}" for k, v in rrule_val.items() if str(v[0])])
             rrule_obj = rrulestr(rrule_str_full, dtstart=dtstart)
 
             # Expand occurrences within the range
@@ -90,9 +86,8 @@ def parse_events(cal, start_range=None, end_range=None):
 def filter_week(events, reference_date=None):
     if reference_date is None:
         reference_date = datetime.datetime.now(pytz.timezone("Asia/Singapore"))
-    else:
-        if reference_date.tzinfo is None:
-            reference_date = reference_date.replace(tzinfo=pytz.UTC)
+    elif reference_date.tzinfo is None:
+        reference_date = reference_date.replace(tzinfo=pytz.UTC)
 
     weekday = reference_date.weekday()  # Monday=0 ... Sunday=6
     days_to_sunday = (weekday + 1) % 7
@@ -101,19 +96,16 @@ def filter_week(events, reference_date=None):
     )
     end_of_week = start_of_week + datetime.timedelta(days=6, hours=23, minutes=59, seconds=59)
 
-    # Expand weekly recurring events in this range
     week_events = []
     for e in events:
-        e_start = e['start']
-        e_end = e['end']
+        e_start, e_end = e['start'], e['end']
 
-        # Make timezone-aware if naive
         if e_start.tzinfo is None:
             e_start = e_start.replace(tzinfo=pytz.UTC)
         if e_end.tzinfo is None:
             e_end = e_end.replace(tzinfo=pytz.UTC)
 
-        # Check if event overlaps with this week
+        # Check if event overlaps this week
         if e_end >= start_of_week and e_start <= end_of_week:
             e_copy = e.copy()
             if e_start < start_of_week:
@@ -139,15 +131,19 @@ def generate_html(events, start_of_week):
     html.append('.header{background:#f94144; color:white; text-align:center; padding:2px;}')
     html.append('</style></head><body>')
     html.append('<div class="week">')
+
     for i in range(7):
         day_date = start_of_week + datetime.timedelta(days=i)
         html.append(f'<div class="day"><div class="header">{days[i]} {day_date.day}</div>')
 
         y_offset = 30
+
+        # All-day events
         for e in events:
             if e['all_day'] and e['start'].date() <= day_date.date() <= e['end'].date():
                 html.append(f'<div class="all_day">{e["summary"]}</div>')
 
+        # Timed events
         for e in events:
             if not e['all_day'] and e['start'].date() == day_date.date():
                 top = e['start'].hour * 30 + e['start'].minute * 0.5 + y_offset
@@ -158,6 +154,7 @@ def generate_html(events, start_of_week):
                             f'{e["location"]}</div>')
 
         html.append('</div>')
+
     html.append('</div></body></html>')
     return "\n".join(html)
 
@@ -172,9 +169,9 @@ def main():
         return
 
     cal = fetch_calendar(url)
-
-    # Determine current week range first
     now = datetime.datetime.now(pytz.timezone("Asia/Singapore"))
+
+    # Expand events for this week
     weekday = now.weekday()
     days_to_sunday = (weekday + 1) % 7
     start_of_week = (now - datetime.timedelta(days=days_to_sunday)).replace(
