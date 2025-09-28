@@ -9,9 +9,6 @@ from icalendar import Calendar
 # ------------------------------
 CALENDAR_ICS_URL = os.environ.get("CALENDAR_ICS_URL")  # Google Calendar ICS URL
 OUTPUT_HTML = "calendar.html"
-HOUR_HEIGHT_PX = 60
-ALL_DAY_HEIGHT_PX = 20
-HEADER_HEIGHT_PX = 20
 
 # ------------------------------
 # Helper functions
@@ -32,10 +29,10 @@ def to_naive_utc(dt):
 
 def get_sunday_start(dt):
     """Get Sunday at 00:00:00 of the current week"""
-    weekday = dt.weekday()  # Monday=0 ... Sunday=6
-    days_to_sunday = (weekday + 1) % 7
+    dt = to_naive_utc(dt)
+    days_to_sunday = (dt.weekday() + 1) % 7  # Monday=0 ... Sunday=6
     sunday = dt - datetime.timedelta(days=days_to_sunday)
-    return datetime.datetime.combine(sunday.date(), datetime.time())
+    return datetime.datetime.combine(sunday.date(), datetime.time(0, 0))
 
 def parse_events(cal):
     events = []
@@ -71,6 +68,8 @@ def parse_events(cal):
         })
 
     print(f"Total events parsed: {len(events)}")
+    for e in events[:5]:
+        print(f"{e['summary']}: {e['start']} → {e['end']}, all_day={e['all_day']}")
     return events
 
 def filter_week(events, reference_date=None):
@@ -96,20 +95,84 @@ def filter_week(events, reference_date=None):
     return week_events, start_of_week
 
 # ------------------------------
-# HTML generation
+# HTML generation (visual timetable)
 # ------------------------------
 def generate_html(events, start_of_week):
-    # Minimal HTML for testing, you can replace with your styled timetable
-    html = "<html><head><meta charset='utf-8'><title>Weekly Calendar</title></head><body>\n"
-    html += f"<h2>Week starting {start_of_week.date()}</h2>\n"
+    days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+    events_by_day = {i: [] for i in range(7)}
     for e in events:
-        html += f"<div style='border:1px solid black; margin:5px; padding:5px;'>"
-        html += f"<strong>{e['summary']}</strong><br>"
-        html += f"{e['start'].strftime('%H:%M')} - {e['end'].strftime('%H:%M')}<br>"
-        if e['location']:
-            html += f"{e['location']}<br>"
-        html += "</div>\n"
-    html += "</body></html>"
+        weekday = e['start'].weekday()
+        events_by_day[weekday].append(e)
+
+    all_day_by_day = {i: [] for i in range(7)}
+    timed_by_day = {i: [] for i in range(7)}
+    for i in range(7):
+        for e in events_by_day[i]:
+            if e['all_day']:
+                all_day_by_day[i].append(e)
+            else:
+                timed_by_day[i].append(e)
+
+    # Determine hour range
+    min_hour = 24
+    max_hour = 0
+    for i in range(7):
+        for e in timed_by_day[i]:
+            min_hour = min(min_hour, e['start'].hour)
+            max_hour = max(max_hour, e['end'].hour + 1)
+    if min_hour >= max_hour:
+        min_hour = 0
+        max_hour = 24
+
+    hour_height = 60  # px per hour
+    all_day_height = 30
+
+    html = f"""
+<html>
+<head>
+<meta charset='utf-8'>
+<title>Weekly Calendar</title>
+<style>
+body {{font-family: sans-serif; margin:0; padding:0;}}
+table {{border-collapse: collapse; width: 100%; table-layout: fixed;}}
+th, td {{border: 1px solid #999; vertical-align: top; position: relative; padding:0;}}
+.day-header {{height: 40px; text-align: center; background:#eee;}}
+.hour-label {{position:absolute; left:0; width:30px; text-align:right; font-size:12px; padding-right:2px;}}
+.event {{position:absolute; left:0; right:0; margin:1px; padding:2px; background:#8cf; border:1px solid #38a; font-size:12px; overflow:hidden;}}
+.all-day-event {{background:#fc8; border:1px solid #c83; font-size:12px; margin:1px; padding:2px;}}
+.td-container {{position:relative; height: {(max_hour-min_hour)*hour_height + all_day_height}px;}}
+</style>
+</head>
+<body>
+<table>
+<tr>
+"""
+    # Header row
+    for i in range(7):
+        day_date = (start_of_week + datetime.timedelta(days=i)).day
+        html += f"<th class='day-header'>{days[i]} {day_date}</th>"
+    html += "</tr>\n<tr>"
+
+    # Table cells per day
+    for i in range(7):
+        html += "<td><div class='td-container'>\n"
+        # All-day events
+        y_offset = 0
+        for e in all_day_by_day[i]:
+            html += f"<div class='all-day-event' style='top:{y_offset}px;'>{e['summary']}</div>\n"
+            y_offset += all_day_height
+        # Timed events
+        for e in timed_by_day[i]:
+            start_offset = ((e['start'].hour + e['start'].minute/60) - min_hour) * hour_height + all_day_height
+            end_offset = ((e['end'].hour + e['end'].minute/60) - min_hour) * hour_height + all_day_height
+            height = max(end_offset - start_offset, 15)
+            html += f"<div class='event' style='top:{start_offset}px; height:{height}px;'>"
+            html += f"{e['summary']}<br>{e['start'].strftime('%H:%M')} - {e['end'].strftime('%H:%M')}<br>"
+            if e['location']:
+                html += f"{e['location']}"
+            html += "</div>\n"
+        html += "</div></td>"
+    html += "</tr>\n</table>\n</body>\n</html>"
     return html
 
 # ------------------------------
