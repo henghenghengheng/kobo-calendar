@@ -32,7 +32,7 @@ def parse_events(cal):
             dtend = component.get("dtend").dt
             all_day = False
 
-            # Handle all-day events
+            # Handle all-day events (date vs datetime)
             if isinstance(dtstart, datetime.date) and not isinstance(dtstart, datetime.datetime):
                 all_day = True
                 dtstart = datetime.datetime.combine(dtstart, datetime.time.min)
@@ -40,16 +40,7 @@ def parse_events(cal):
                 all_day = True
                 dtend = datetime.datetime.combine(dtend, datetime.time.min)
 
-            # Convert to local timezone
-            if dtstart.tzinfo is None:
-                dtstart = pytz.UTC.localize(dtstart).astimezone(LOCAL_TZ)
-            else:
-                dtstart = dtstart.astimezone(LOCAL_TZ)
-            if dtend.tzinfo is None:
-                dtend = pytz.UTC.localize(dtend).astimezone(LOCAL_TZ)
-            else:
-                dtend = dtend.astimezone(LOCAL_TZ)
-
+            # Keep timezone if available
             events.append({
                 "summary": summary,
                 "location": location,
@@ -71,12 +62,12 @@ def filter_week(events, reference_date=None):
         if reference_date.tzinfo is None:
             reference_date = LOCAL_TZ.localize(reference_date)
 
-    # Sunday → Saturday week
+    # Compute start (Sunday) and end (Saturday) of the current week
     weekday = reference_date.weekday()  # Monday=0 ... Sunday=6
     days_to_sunday = (weekday + 1) % 7
     sunday = reference_date - datetime.timedelta(days=days_to_sunday)
     start_of_week = sunday.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_week = start_of_week + datetime.timedelta(days=7)
+    end_of_week = start_of_week + datetime.timedelta(days=6, hours=23, minutes=59, seconds=59)
 
     week_events = []
     for e in events:
@@ -89,15 +80,17 @@ def filter_week(events, reference_date=None):
         if e_end.tzinfo is None:
             e_end = LOCAL_TZ.localize(e_end)
 
-        if e_end > start_of_week and e_start < end_of_week:
+        # Include events that overlap the week
+        if e_end >= start_of_week and e_start <= end_of_week:
             e_copy = e.copy()
+            # Clip events that start before Sunday or end after Saturday
             if e_start < start_of_week:
                 e_copy['start'] = start_of_week
             if e_end > end_of_week:
                 e_copy['end'] = end_of_week
             week_events.append(e_copy)
 
-    print(f"Events this week: {len(week_events)} (week starting {start_of_week.date()})")
+    print(f"Events this week: {len(week_events)} (Sunday {start_of_week.date()} → Saturday {end_of_week.date()})")
     for e in week_events:
         print(f"- {e['summary']}: {e['start']} → {e['end']}")
     return week_events, start_of_week
@@ -129,7 +122,6 @@ def generate_html(events, start_of_week):
         # timed events
         for e in events:
             if not e['all_day'] and e['start'].date() == day_date.date():
-                # Compute top and height
                 top = e['start'].hour * 30 + e['start'].minute * 0.5 + y_offset
                 height = max(20, ((e['end'] - e['start']).seconds / 60) * 0.5)
                 html.append(f'<div class="event" style="top:{top}px; height:{height}px;">'
