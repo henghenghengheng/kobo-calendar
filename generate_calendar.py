@@ -1,132 +1,188 @@
 import os
+import datetime
 import requests
+import pytz
 from icalendar import Calendar
-from datetime import datetime, date, time, timedelta, timezone
-from dateutil.rrule import rrulestr
 
-OUTPUT_FILE = "index.html"  # GitHub Pages root
+# ------------------------------
+# Configuration
+# ------------------------------
+CALENDAR_ICS_URL = os.environ.get("CALENDAR_ICS_URL")  # Your Google Calendar ICS URL
+DAYS_AHEAD = 7
+OUTPUT_HTML = "calendar.html"
+HOUR_HEIGHT_PX = 60  # 1 hour = 60px
+ALL_DAY_HEIGHT_PX = 20  # height of all-day event block
+HEADER_HEIGHT_PX = 20   # height of header row
 
-def fetch_ics(url: str) -> Calendar:
-    resp = requests.get(url)
-    resp.raise_for_status()
-    return Calendar.from_ical(resp.text)
+# ------------------------------
+# Helper functions
+# ------------------------------
+def fetch_ics(url):
+    response = requests.get(url)
+    response.raise_for_status()
+    return Calendar.from_ical(response.text)
 
-def normalize_dt(dt):
-    """Return a naive UTC datetime, or None if invalid."""
-    if not dt:
-        return None
-    if hasattr(dt, "dt"):
-        dt = dt.dt
-    if isinstance(dt, datetime):
+def get_start_of_week(dt):
+    """Return Sunday of the week containing dt"""
+    return dt - datetime.timedelta(days=dt.weekday()+1 if dt.weekday() != 6 else 0)
+
+def to_naive_utc(dt):
+    """Convert datetime to naive UTC"""
+    if isinstance(dt, datetime.datetime):
         if dt.tzinfo is not None:
-            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-        return dt
-    elif isinstance(dt, date):
-        return datetime.combine(dt, time.min)
-    return None
-
-def get_current_week_range():
-    """Return start (Sunday 00:00) and end (Saturday 23:59) of this week."""
-    today = datetime.now(timezone.utc).replace(tzinfo=None)
-    days_since_sunday = (today.weekday() + 1) % 7
-    start_of_week = today - timedelta(days=days_since_sunday)
-    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_week = start_of_week + timedelta(days=6, hours=23, minutes=59, seconds=59)
-    return start_of_week, end_of_week
-
-def parse_events(cal: Calendar):
-    events = []
-    week_start, week_end = get_current_week_range()
-
-    for component in cal.walk():
-        if component.name != "VEVENT":
-            continue
-
-        start = normalize_dt(component.get("DTSTART"))
-        end = normalize_dt(component.get("DTEND"))
-        summary = str(component.get("SUMMARY", "No Title"))
-        rrule_data = component.get("RRULE")
-
-        # skip invalid events
-        if not start or not end:
-            continue
-
-        # handle recurrence
-        if rrule_data:
-            rrule_str_full = ""
-            for k, v in rrule_data.items():
-                rrule_str_full += f"{k}={','.join(map(str,v))};"
-            rrule_str_full = rrule_str_full.rstrip(";")
-            try:
-                rule = rrulestr(rrule_str_full, dtstart=start)
-                for occ in rule.between(week_start, week_end, inc=True):
-                    occ_end = occ + (end - start)
-                    events.append({
-                        "start": occ,
-                        "end": occ_end,
-                        "summary": summary,
-                    })
-            except Exception as e:
-                print(f"Skipping recurring event '{summary}' due to parsing error: {e}")
+            return dt.astimezone(pytz.UTC).replace(tzinfo=None)
         else:
-            if week_start <= start <= week_end:
-                events.append({
-                    "start": start,
-                    "end": end,
-                    "summary": summary,
-                })
+            return dt
+    return datetime.datetime.combine(dt, datetime.time())  # for date objects
 
-    events.sort(key=lambda e: e["start"])
+def parse_events(cal):
+    """Return list of dicts with keys: summary, start, end, all_day, location"""
+    events = []
+    for component in cal.walk():
+        if component.name == "VEVENT":
+            start_prop = component.get('dtstart')
+            end_prop = component.get('dtend')
+
+            if start_prop is None:
+                continue  # skip invalid events
+            start = start_prop.dt
+
+            # fallback if dtend missing
+            if end_prop is None:
+                if isinstance(start, datetime.datetime):
+                    end = start + datetime.timedelta(hours=1)
+                else:  # date object
+                    end = start + datetime.timedelta(days=1)
+            else:
+                end = end_prop.dt
+
+            all_day = False
+            if isinstance(start, datetime.date) and not isinstance(start, datetime.datetime):
+                start = datetime.datetime.combine(start, datetime.time())
+                end = datetime.datetime.combine(end, datetime.time())
+                all_day = True
+
+            # normalize to naive UTC
+            start = to_naive_utc(start)
+            end = to_naive_utc(end)
+
+            location = component.get('location')
+            events.append({
+                'summary': str(component.get('summary', 'No Title')),
+                'start': start,
+                'end': end,
+                'all_day': all_day,
+                'location': str(location) if location else ''
+            })
     return events
 
-def render_html(events):
-    html = [
-        "<!DOCTYPE html>",
-        "<html>",
-        "<head>",
-        "<meta charset='utf-8'>",
-        "<title>Kobo Calendar</title>",
-        "<style>",
-        "body { font-family: sans-serif; background: #fff; color: #000; padding: 1em; }",
-        "h1 { font-size: 1.4em; margin-bottom: 0.5em; }",
-        "div.event { margin-bottom: 1em; padding-bottom: 0.5em; border-bottom: 1px solid #ccc; }",
-        "div.date { font-weight: bold; margin-bottom: 0.2em; }",
-        "</style>",
-        "</head>",
-        "<body>",
-        "<h1>Events This Week</h1>"
-    ]
+def filter_week(events, reference_date=None):
+    """Return events for this week (Sun-Sat)"""
+    if reference_date is None:
+        reference_date = datetime.datetime.utcnow()
+    reference_date = to_naive_utc(reference_date)
+    start_of_week = get_start_of_week(reference_date)
+    end_of_week = start_of_week + datetime.timedelta(days=7)
+    week_events = []
+    for e in events:
+        if e['end'] > start_of_week and e['start'] < end_of_week:
+            e_copy = e.copy()
+            if e_copy['start'] < start_of_week:
+                e_copy['start'] = start_of_week
+            if e_copy['end'] > end_of_week:
+                e_copy['end'] = end_of_week
+            week_events.append(e_copy)
+    return week_events, start_of_week
 
-    if not events:
-        html.append("<p>No events scheduled this week.</p>")
-    else:
-        for e in events:
-            date_str = e["start"].strftime("%a, %b %d %Y")
-            if e["start"].time() != time.min or e["end"].time() != time.min:
-                time_str = f"{e['start'].strftime('%H:%M')} – {e['end'].strftime('%H:%M')}"
-            else:
-                time_str = "All day"
-            html.append("<div class='event'>")
-            html.append(f"<div class='date'>{date_str} ({time_str})</div>")
-            html.append(f"<div class='summary'>{e['summary']}</div>")
-            html.append("</div>")
+def compute_earliest_latest(events):
+    timed_events = [e for e in events if not e['all_day']]
+    if not timed_events:
+        return 8.0, 17.0  # fallback
+    earliest = min(e['start'].hour + e['start'].minute/60 for e in timed_events)
+    latest = max(e['end'].hour + e['end'].minute/60 for e in timed_events)
+    return earliest, latest
 
-    html.extend(["</body>", "</html>"])
-    return "\n".join(html)
+def generate_html(events, start_of_week):
+    all_day_events = [e for e in events if e['all_day']]
+    timed_events = [e for e in events if not e['all_day']]
 
+    earliest_hour, latest_hour = compute_earliest_latest(events)
+    hour_height = HOUR_HEIGHT_PX
+
+    html = ['<!DOCTYPE html>',
+            '<html><head><meta charset="utf-8"><title>Kobo Calendar</title>',
+            '<style>',
+            'body { font-family:sans-serif; background:#fff; color:#000; margin:0; padding:0.5em; }',
+            '.container { display:flex; width:100%; }',
+            '.hour-labels { width:40px; display:flex; flex-direction:column; margin-top:%dpx; }' % (ALL_DAY_HEIGHT_PX + HEADER_HEIGHT_PX),
+            '.hour-labels div { height:%dpx; font-size:0.7em; text-align:right; padding-right:2px; border-bottom:1px solid #eee; }' % hour_height,
+            '.week { display:flex; flex:1; }',
+            '.day-column { flex:1; border-left:1px solid #ccc; position:relative; margin-left:2px; }',
+            '.day-column-header { text-align:center; background:#eee; font-weight:bold; border-bottom:1px solid #ccc; height:%dpx; line-height:%dpx; }' % (HEADER_HEIGHT_PX, HEADER_HEIGHT_PX),
+            '.event { position:absolute; left:2px; right:2px; background:#999; color:#fff; font-size:0.7em; padding:1px; border-radius:2px; line-height:1em; }',
+            '.event .time { font-size:0.65em; }',
+            '.event .location { font-size:0.65em; }',
+            '.all-day { position:absolute; left:2px; right:2px; top:%dpx; background:#555; color:#fff; font-size:0.7em; padding:1px; border-radius:2px; }' % HEADER_HEIGHT_PX,
+            '</style></head><body>']
+
+    # Hour labels
+    html.append('<div class="container">')
+    html.append('<div class="hour-labels">')
+    for h in range(int(earliest_hour), int(latest_hour)+1):
+        html.append('<div>%02d:00</div>' % h)
+    html.append('</div>')
+
+    # Week columns
+    html.append('<div class="week">')
+    for i in range(7):
+        day_date = start_of_week + datetime.timedelta(days=i)
+        html.append('<div class="day-column">')
+        html.append('<div class="day-column-header">%s %d</div>' % (day_date.strftime('%a'), day_date.day))
+
+        # all-day events
+        y_offset = 0
+        for e in all_day_events:
+            if e['start'].date() <= day_date.date() <= (e['end'] - datetime.timedelta(seconds=1)).date():
+                html.append('<div class="all-day" style="top:%dpx;">%s</div>' % (y_offset, e['summary']))
+                y_offset += ALL_DAY_HEIGHT_PX
+
+        # timed events
+        for e in timed_events:
+            if e['start'].date() <= day_date.date() <= e['end'].date():
+                start_time = e['start']
+                end_time = e['end']
+                if start_time.date() < day_date.date():
+                    start_time = datetime.datetime.combine(day_date.date(), datetime.time(int(earliest_hour)))
+                if end_time.date() > day_date.date():
+                    end_time = datetime.datetime.combine(day_date.date(), datetime.time(int(latest_hour)))
+                top = (start_time.hour + start_time.minute/60 - earliest_hour) * hour_height + ALL_DAY_HEIGHT_PX + HEADER_HEIGHT_PX
+                height = (end_time.hour + end_time.minute/60 - start_time.hour - start_time.minute/60) * hour_height
+                html.append('<div class="event" style="top:%dpx; height:%dpx;">%s<br><span class="time">%s - %s</span>%s</div>' %
+                            (top, height, e['summary'],
+                             start_time.strftime('%H:%M'),
+                             end_time.strftime('%H:%M'),
+                             '<br><span class="location">%s</span>' % e['location'] if e['location'] else ''))
+
+        html.append('</div>')
+    html.append('</div>')
+    html.append('</div>')
+    html.append('</body></html>')
+
+    return '\n'.join(html)
+
+# ------------------------------
+# Main
+# ------------------------------
 def main():
-    url = os.environ.get("CALENDAR_ICS_URL")
-    if not url:
-        raise RuntimeError("CALENDAR_ICS_URL environment variable not set.")
-
-    cal = fetch_ics(url)
+    if not CALENDAR_ICS_URL:
+        raise ValueError("CALENDAR_ICS_URL environment variable not set")
+    cal = fetch_ics(CALENDAR_ICS_URL)
     events = parse_events(cal)
-    html = render_html(events)
-
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    week_events, start_of_week = filter_week(events)
+    html = generate_html(week_events, start_of_week)
+    with open(OUTPUT_HTML, 'w', encoding='utf-8') as f:
         f.write(html)
-
-    print(f"✅ Wrote {len(events)} events to {OUTPUT_FILE}")
+    print(f"Calendar HTML written to {OUTPUT_HTML}")
 
 if __name__ == "__main__":
     main()
