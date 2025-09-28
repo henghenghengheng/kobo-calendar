@@ -19,7 +19,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: pip install requests icalendar
+        run: pip install requests icalendar python-dateutil
 
       - name: Generate index.html
         run: python generate_calendar.py
