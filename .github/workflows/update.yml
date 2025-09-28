@@ -1,8 +1,8 @@
-name: Update and Deploy Calendar
+name: Update and Deploy Weekly Calendar
 
 on:
   schedule:
-    - cron: "0 * * * *"   # every hour
+    - cron: "0 0 * * 0"   # every Sunday at 00:00 UTC
   workflow_dispatch:       # allow manual run
 
 jobs:
@@ -21,16 +21,16 @@ jobs:
       - name: Install dependencies
         run: pip install requests icalendar
 
-      - name: Generate calendar.html
+      - name: Generate index.html
         run: python generate_calendar.py
         env:
           CALENDAR_ICS_URL: ${{ secrets.CALENDAR_ICS_URL }}
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v6
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./   # root of repo
+          publish_dir: ./         # root contains index.html
           publish_branch: gh-pages
           user_name: github-actions[bot]
           user_email: github-actions[bot]@users.noreply.github.com
