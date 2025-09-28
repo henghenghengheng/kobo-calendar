@@ -3,7 +3,7 @@ import requests
 from icalendar import Calendar
 from datetime import datetime, date, time, timedelta, timezone
 
-OUTPUT_FILE = "calendar.html"
+OUTPUT_FILE = "index.html"  # for root GitHub Pages URL
 
 def fetch_ics(url: str) -> Calendar:
     resp = requests.get(url)
@@ -16,29 +16,38 @@ def normalize_dt(dt):
         dt = dt.dt
     if isinstance(dt, datetime):
         if dt.tzinfo is not None:
-            # convert aware → UTC → naive
             return dt.astimezone(timezone.utc).replace(tzinfo=None)
-        return dt  # already naive
+        return dt
     elif isinstance(dt, date):
         return datetime.combine(dt, time.min)
     return None
 
-def parse_events(cal: Calendar, days_ahead: int = 14):
+def get_current_week_range():
+    """Return start (Sunday 00:00) and end (Saturday 23:59) of this week."""
+    today = datetime.now(timezone.utc).replace(tzinfo=None)
+    # Python's weekday(): Monday=0, Sunday=6
+    days_since_sunday = (today.weekday() + 1) % 7
+    start_of_week = today - timedelta(days=days_since_sunday)
+    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_week = start_of_week + timedelta(days=6, hours=23, minutes=59, seconds=59)
+    return start_of_week, end_of_week
+
+def parse_events(cal: Calendar):
     events = []
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    cutoff = now + timedelta(days=days_ahead)
+    week_start, week_end = get_current_week_range()
 
     for component in cal.walk():
         if component.name == "VEVENT":
             start = normalize_dt(component.get("DTSTART"))
             end = normalize_dt(component.get("DTEND"))
             summary = str(component.get("SUMMARY", "No Title"))
-            if start and start <= cutoff and end:
+            if start and end and week_start <= start <= week_end:
                 events.append({
                     "start": start,
                     "end": end,
                     "summary": summary,
                 })
+
     events.sort(key=lambda e: e["start"])
     return events
 
@@ -57,11 +66,11 @@ def render_html(events):
         "</style>",
         "</head>",
         "<body>",
-        "<h1>Upcoming Events</h1>"
+        "<h1>Events This Week</h1>"
     ]
 
     if not events:
-        html.append("<p>No events found.</p>")
+        html.append("<p>No events scheduled this week.</p>")
     else:
         for e in events:
             date_str = e["start"].strftime("%a, %b %d %Y")
@@ -83,14 +92,13 @@ def main():
         raise RuntimeError("CALENDAR_ICS_URL environment variable not set.")
 
     cal = fetch_ics(url)
-    events = parse_events(cal, days_ahead=14)
+    events = parse_events(cal)
     html = render_html(events)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(html)
 
     print(f"✅ Wrote {len(events)} events to {OUTPUT_FILE}")
-
 
 if __name__ == "__main__":
     main()
