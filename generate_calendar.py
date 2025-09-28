@@ -1,6 +1,7 @@
 import os
 import datetime
 import requests
+import pytz
 from icalendar import Calendar
 
 # ------------------------------
@@ -24,6 +25,15 @@ def fetch_ics(url):
 def get_start_of_week(dt):
     """Return Sunday of the week containing dt"""
     return dt - datetime.timedelta(days=dt.weekday()+1 if dt.weekday() != 6 else 0)
+
+def to_naive_utc(dt):
+    """Convert datetime to naive UTC"""
+    if isinstance(dt, datetime.datetime):
+        if dt.tzinfo is not None:
+            return dt.astimezone(pytz.UTC).replace(tzinfo=None)
+        else:
+            return dt
+    return datetime.datetime.combine(dt, datetime.time())  # for date objects
 
 def parse_events(cal):
     """Return list of dicts with keys: summary, start, end, all_day, location"""
@@ -52,6 +62,10 @@ def parse_events(cal):
                 end = datetime.datetime.combine(end, datetime.time())
                 all_day = True
 
+            # normalize to naive UTC
+            start = to_naive_utc(start)
+            end = to_naive_utc(end)
+
             location = component.get('location')
             events.append({
                 'summary': str(component.get('summary', 'No Title')),
@@ -65,7 +79,8 @@ def parse_events(cal):
 def filter_week(events, reference_date=None):
     """Return events for this week (Sun-Sat)"""
     if reference_date is None:
-        reference_date = datetime.datetime.now()
+        reference_date = datetime.datetime.utcnow()
+    reference_date = to_naive_utc(reference_date)
     start_of_week = get_start_of_week(reference_date)
     end_of_week = start_of_week + datetime.timedelta(days=7)
     week_events = []
