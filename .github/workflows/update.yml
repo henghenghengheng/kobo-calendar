@@ -7,13 +7,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  update-calendar:
     runs-on: ubuntu-24.04
 
     steps:
-      # Checkout repo
+      # Checkout repo with write access
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true  # needed for pushing
 
       # Setup Python
       - name: Set up Python
@@ -33,11 +35,11 @@ jobs:
         env:
           CALENDAR_ICS_URL: ${{ secrets.CALENDAR_ICS_URL }}
 
-      # Deploy to GitHub Pages (force overwrite)
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./            # Root directory
-          publish_branch: gh-pages   # The branch your Pages site uses
-          force_orphan: true         # Force branch to be fully replaced
+      # Commit and push the updated calendar.html
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add calendar.html
+          git diff-index --quiet HEAD || git commit -m "Update calendar.html [ci skip]"
+          git push
