@@ -1,7 +1,7 @@
 import os
 import requests
 from icalendar import Calendar
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, time, timedelta, timezone
 
 OUTPUT_FILE = "calendar.html"
 
@@ -11,18 +11,21 @@ def fetch_ics(url: str) -> Calendar:
     return Calendar.from_ical(resp.text)
 
 def normalize_dt(dt):
-    """Ensure we always return a datetime (never a date)."""
+    """Ensure we always return a naive UTC datetime."""
     if hasattr(dt, "dt"):
         dt = dt.dt
     if isinstance(dt, datetime):
-        return dt
+        if dt.tzinfo is not None:
+            # convert aware → UTC → naive
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt  # already naive
     elif isinstance(dt, date):
         return datetime.combine(dt, time.min)
     return None
 
 def parse_events(cal: Calendar, days_ahead: int = 14):
     events = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     cutoff = now + timedelta(days=days_ahead)
 
     for component in cal.walk():
@@ -63,7 +66,6 @@ def render_html(events):
         for e in events:
             date_str = e["start"].strftime("%a, %b %d %Y")
             if e["start"].time() != time.min or e["end"].time() != time.min:
-                # Timed event
                 time_str = f"{e['start'].strftime('%H:%M')} – {e['end'].strftime('%H:%M')}"
             else:
                 time_str = "All day"
