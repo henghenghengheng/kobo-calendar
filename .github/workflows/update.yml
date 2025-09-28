@@ -29,12 +29,14 @@ jobs:
           CALENDAR_ICS_URL: ${{ secrets.CALENDAR_ICS_URL }}
         run: python generate_calendar.py
 
-      # 5️⃣ Deploy to GitHub Pages
+      # 5️⃣ Deploy only calendar.html to gh-pages
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v5
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./  # only deploy calendar.html from repo root
+          publish_dir: ./  # only deploy calendar.html from root
           user_name: github-actions
           user_email: github-actions@github.com
+          keep_files: false  # removes other files from gh-pages branch
+          allow_empty_commit: true
