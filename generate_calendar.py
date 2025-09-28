@@ -3,6 +3,7 @@ import requests
 from icalendar import Calendar
 import pytz
 from dateutil.rrule import rrulestr
+import re
 
 # -----------------------------
 # Fetch ICS
@@ -48,22 +49,37 @@ def parse_events(cal, start_range=None, end_range=None):
         # Check for recurrence
         rrule_val = component.get("RRULE")
         if rrule_val:
+            # Build RRULE string and remove unsupported tokens
             rrule_str_full = ";".join([f"{k}={v[0]}" for k, v in rrule_val.items() if str(v[0])])
-            rrule_obj = rrulestr(rrule_str_full, dtstart=dtstart)
+            # Remove numeric-only unsupported properties (like "15")
+            rrule_str_clean = re.sub(r'(?:^|;)\d+', '', rrule_str_full)
 
-            # Expand occurrences within the range
-            if start_range and end_range:
-                occurrences = list(rrule_obj.between(start_range, end_range, inc=True))
-            else:
-                occurrences = list(rrule_obj)
+            try:
+                rrule_obj = rrulestr(rrule_str_clean, dtstart=dtstart)
 
-            for occ_start in occurrences:
-                occ_end = occ_start + (dtend - dtstart)
+                # Expand occurrences within the range
+                if start_range and end_range:
+                    occurrences = list(rrule_obj.between(start_range, end_range, inc=True))
+                else:
+                    occurrences = list(rrule_obj)
+
+                for occ_start in occurrences:
+                    occ_end = occ_start + (dtend - dtstart)
+                    events.append({
+                        "summary": summary,
+                        "location": location,
+                        "start": occ_start,
+                        "end": occ_end,
+                        "all_day": all_day
+                    })
+            except Exception as e:
+                print(f"Warning: Skipping unsupported RRULE for event '{summary}': {e}")
+                # fallback: include the original single event
                 events.append({
                     "summary": summary,
                     "location": location,
-                    "start": occ_start,
-                    "end": occ_end,
+                    "start": dtstart,
+                    "end": dtend,
                     "all_day": all_day
                 })
         else:
