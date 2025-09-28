@@ -49,10 +49,10 @@ def parse_events(cal, start_range=None, end_range=None):
         # Check for recurrence
         rrule_val = component.get("RRULE")
         if rrule_val:
-            # Build RRULE string and remove unsupported tokens
+            # Build RRULE string
             rrule_str_full = ";".join([f"{k}={v[0]}" for k, v in rrule_val.items() if str(v[0])])
-            # Remove numeric-only unsupported properties (like "15")
-            rrule_str_clean = re.sub(r'(?:^|;)\d+', '', rrule_str_full)
+            # Remove unsupported tokens (like numeric-only "15")
+            rrule_str_clean = re.sub(r'(?:^|;)\d+=\d+', '', rrule_str_full)
 
             try:
                 rrule_obj = rrulestr(rrule_str_clean, dtstart=dtstart)
@@ -181,10 +181,15 @@ def main():
     import os
     url = os.environ.get("CALENDAR_ICS_URL")
     if not url:
-        print("Error: CALENDAR_ICS_URL environment variable not set.")
-        return
+        print("Warning: CALENDAR_ICS_URL environment variable not set. Creating empty calendar.")
+        cal = None
+    else:
+        try:
+            cal = fetch_calendar(url)
+        except Exception as e:
+            print(f"Error fetching ICS calendar: {e}")
+            cal = None
 
-    cal = fetch_calendar(url)
     now = datetime.datetime.now(pytz.timezone("Asia/Singapore"))
 
     # Expand events for this week
@@ -195,13 +200,37 @@ def main():
     )
     end_of_week = start_of_week + datetime.timedelta(days=6, hours=23, minutes=59, seconds=59)
 
-    events = parse_events(cal, start_of_week, end_of_week)
-    week_events, start_of_week = filter_week(events, now)
-    html = generate_html(week_events, start_of_week)
+    # Parse events
+    events = []
+    if cal:
+        try:
+            events = parse_events(cal, start_of_week, end_of_week)
+        except Exception as e:
+            print(f"Error parsing events: {e}")
 
-    with open("calendar.html", "w", encoding="utf-8") as f:
-        f.write(html)
-    print("Calendar HTML written to calendar.html")
+    # Filter events for the week
+    try:
+        week_events, start_of_week = filter_week(events, now)
+    except Exception as e:
+        print(f"Error filtering week events: {e}")
+        week_events, start_of_week = [], start_of_week
+
+    # Generate HTML
+    try:
+        html = generate_html(week_events, start_of_week)
+    except Exception as e:
+        print(f"Error generating HTML: {e}")
+        html = "<html><body><h1>Error generating calendar</h1></body></html>"
+
+    # Write to file
+    try:
+        fpath = "calendar.html"
+        print(f"Writing calendar.html to {fpath} ...")
+        with open(fpath, "w", encoding="utf-8") as f:
+            f.write(html)
+        print("Calendar HTML written successfully")
+    except Exception as e:
+        print(f"Error writing calendar.html: {e}")
 
 if __name__ == "__main__":
     main()
