@@ -63,7 +63,7 @@ def render_html(events):
         for e in events:
             date_str = e["start"].strftime("%a, %b %d %Y")
             if e["start"].time() != time.min or e["end"].time() != time.min:
-                # timed event
+                # Timed event
                 time_str = f"{e['start'].strftime('%H:%M')} – {e['end'].strftime('%H:%M')}"
             else:
                 time_str = "All day"
@@ -85,4 +85,10 @@ def main():
     html = render_html(events)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        f.write(htm
+        f.write(html)
+
+    print(f"✅ Wrote {len(events)} events to {OUTPUT_FILE}")
+
+
+if __name__ == "__main__":
+    main()
