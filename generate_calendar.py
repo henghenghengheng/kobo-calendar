@@ -4,6 +4,11 @@ from icalendar import Calendar
 import pytz
 
 # -----------------------------
+# Local timezone
+# -----------------------------
+LOCAL_TZ = pytz.timezone("Asia/Singapore")
+
+# -----------------------------
 # Fetch ICS
 # -----------------------------
 def fetch_calendar(url):
@@ -27,7 +32,7 @@ def parse_events(cal):
             dtend = component.get("dtend").dt
             all_day = False
 
-            # Handle all-day events (date vs datetime)
+            # Handle all-day events
             if isinstance(dtstart, datetime.date) and not isinstance(dtstart, datetime.datetime):
                 all_day = True
                 dtstart = datetime.datetime.combine(dtstart, datetime.time.min)
@@ -35,7 +40,16 @@ def parse_events(cal):
                 all_day = True
                 dtend = datetime.datetime.combine(dtend, datetime.time.min)
 
-            # Keep timezone if available
+            # Convert to local timezone
+            if dtstart.tzinfo is None:
+                dtstart = pytz.UTC.localize(dtstart).astimezone(LOCAL_TZ)
+            else:
+                dtstart = dtstart.astimezone(LOCAL_TZ)
+            if dtend.tzinfo is None:
+                dtend = pytz.UTC.localize(dtend).astimezone(LOCAL_TZ)
+            else:
+                dtend = dtend.astimezone(LOCAL_TZ)
+
             events.append({
                 "summary": summary,
                 "location": location,
@@ -52,11 +66,12 @@ def parse_events(cal):
 # -----------------------------
 def filter_week(events, reference_date=None):
     if reference_date is None:
-        reference_date = datetime.datetime.now(pytz.UTC)
+        reference_date = datetime.datetime.now(LOCAL_TZ)
     else:
         if reference_date.tzinfo is None:
-            reference_date = reference_date.replace(tzinfo=pytz.UTC)
+            reference_date = LOCAL_TZ.localize(reference_date)
 
+    # Sunday → Saturday week
     weekday = reference_date.weekday()  # Monday=0 ... Sunday=6
     days_to_sunday = (weekday + 1) % 7
     sunday = reference_date - datetime.timedelta(days=days_to_sunday)
@@ -70,9 +85,9 @@ def filter_week(events, reference_date=None):
 
         # Make timezone-aware if naive
         if e_start.tzinfo is None:
-            e_start = e_start.replace(tzinfo=pytz.UTC)
+            e_start = LOCAL_TZ.localize(e_start)
         if e_end.tzinfo is None:
-            e_end = e_end.replace(tzinfo=pytz.UTC)
+            e_end = LOCAL_TZ.localize(e_end)
 
         if e_end > start_of_week and e_start < end_of_week:
             e_copy = e.copy()
@@ -114,7 +129,7 @@ def generate_html(events, start_of_week):
         # timed events
         for e in events:
             if not e['all_day'] and e['start'].date() == day_date.date():
-                # Compute top and height (example: 8:00=8*30 px)
+                # Compute top and height
                 top = e['start'].hour * 30 + e['start'].minute * 0.5 + y_offset
                 height = max(20, ((e['end'] - e['start']).seconds / 60) * 0.5)
                 html.append(f'<div class="event" style="top:{top}px; height:{height}px;">'
