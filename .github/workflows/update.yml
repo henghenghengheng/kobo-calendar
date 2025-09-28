@@ -1,4 +1,5 @@
 name: Update Calendar
+
 on:
   schedule:
     - cron: "0 */6 * * *"   # every 6 hours
@@ -7,20 +8,27 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-      - name: Install deps
+
+      - name: Install dependencies
         run: pip install requests icalendar
+
       - name: Generate calendar
         run: python generate_calendar.py
+        env:
+          CALENDAR_ICS_URL: ${{ secrets.CALENDAR_ICS_URL }}
+
       - name: Commit and push
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add calendar.html
-          git commit -m "Update calendar"
+          git commit -m "Update calendar" || echo "No changes to commit"
           git push
