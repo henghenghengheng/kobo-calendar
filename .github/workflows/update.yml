@@ -1,36 +1,38 @@
-name: Update and Deploy Weekly Calendar
+name: Update Kobo Calendar
 
 on:
   schedule:
-    - cron: "0 0 * * 0"   # every Sunday at 00:00 UTC
-  workflow_dispatch:       # allow manual trigger
+    - cron: '0 * * * *'  # every hour
+  workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      # 1️⃣ Check out the repository
+      - uses: actions/checkout@v4
 
+      # 2️⃣ Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.13"
 
+      # 3️⃣ Install dependencies
       - name: Install dependencies
-        run: pip install requests icalendar python-dateutil
+        run: pip install icalendar requests pytz
 
-      - name: Generate index.html
-        run: python generate_calendar.py
+      # 4️⃣ Generate calendar HTML
+      - name: Generate calendar
         env:
           CALENDAR_ICS_URL: ${{ secrets.CALENDAR_ICS_URL }}
+        run: python generate_calendar.py
 
+      # 5️⃣ Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@v5
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./          # root contains index.html
+          publish_dir: ./  # root of repository contains calendar.html
           publish_branch: gh-pages
-          user_name: github-actions[bot]
-          user_email: github-actions[bot]@users.noreply.github.com
