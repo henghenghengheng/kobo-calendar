@@ -3,7 +3,7 @@ import requests
 from icalendar import Calendar
 from datetime import datetime, date, time, timedelta, timezone
 
-OUTPUT_FILE = "index.html"  # for root GitHub Pages URL
+OUTPUT_FILE = "index.html"  # GitHub Pages root
 
 def fetch_ics(url: str) -> Calendar:
     resp = requests.get(url)
@@ -11,12 +11,14 @@ def fetch_ics(url: str) -> Calendar:
     return Calendar.from_ical(resp.text)
 
 def normalize_dt(dt):
-    """Ensure we always return a naive UTC datetime."""
+    """Return a naive UTC datetime, or None if invalid."""
+    if not dt:
+        return None
     if hasattr(dt, "dt"):
         dt = dt.dt
     if isinstance(dt, datetime):
         if dt.tzinfo is not None:
-            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
         return dt
     elif isinstance(dt, date):
         return datetime.combine(dt, time.min)
@@ -25,7 +27,6 @@ def normalize_dt(dt):
 def get_current_week_range():
     """Return start (Sunday 00:00) and end (Saturday 23:59) of this week."""
     today = datetime.now(timezone.utc).replace(tzinfo=None)
-    # Python's weekday(): Monday=0, Sunday=6
     days_since_sunday = (today.weekday() + 1) % 7
     start_of_week = today - timedelta(days=days_since_sunday)
     start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -41,7 +42,13 @@ def parse_events(cal: Calendar):
             start = normalize_dt(component.get("DTSTART"))
             end = normalize_dt(component.get("DTEND"))
             summary = str(component.get("SUMMARY", "No Title"))
-            if start and end and week_start <= start <= week_end:
+
+            # skip invalid or obviously wrong dates
+            if not start or not end or start.year < 2000:
+                continue
+
+            # include only events in this week
+            if week_start <= start <= week_end:
                 events.append({
                     "start": start,
                     "end": end,
