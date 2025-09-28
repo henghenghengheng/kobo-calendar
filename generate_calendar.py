@@ -2,6 +2,7 @@ import os
 import requests
 from icalendar import Calendar
 from datetime import datetime, date, time, timedelta, timezone
+from dateutil.rrule import rrulestr
 
 OUTPUT_FILE = "index.html"  # GitHub Pages root
 
@@ -38,16 +39,36 @@ def parse_events(cal: Calendar):
     week_start, week_end = get_current_week_range()
 
     for component in cal.walk():
-        if component.name == "VEVENT":
-            start = normalize_dt(component.get("DTSTART"))
-            end = normalize_dt(component.get("DTEND"))
-            summary = str(component.get("SUMMARY", "No Title"))
+        if component.name != "VEVENT":
+            continue
 
-            # skip invalid or obviously wrong dates
-            if not start or not end or start.year < 2000:
-                continue
+        start = normalize_dt(component.get("DTSTART"))
+        end = normalize_dt(component.get("DTEND"))
+        summary = str(component.get("SUMMARY", "No Title"))
+        rrule_data = component.get("RRULE")
 
-            # include only events in this week
+        # skip invalid events
+        if not start or not end:
+            continue
+
+        # handle recurrence
+        if rrule_data:
+            rrule_str_full = ""
+            for k, v in rrule_data.items():
+                rrule_str_full += f"{k}={','.join(map(str,v))};"
+            rrule_str_full = rrule_str_full.rstrip(";")
+            try:
+                rule = rrulestr(rrule_str_full, dtstart=start)
+                for occ in rule.between(week_start, week_end, inc=True):
+                    occ_end = occ + (end - start)
+                    events.append({
+                        "start": occ,
+                        "end": occ_end,
+                        "summary": summary,
+                    })
+            except Exception as e:
+                print(f"Skipping recurring event '{summary}' due to parsing error: {e}")
+        else:
             if week_start <= start <= week_end:
                 events.append({
                     "start": start,
