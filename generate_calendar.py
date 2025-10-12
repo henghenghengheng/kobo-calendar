@@ -30,6 +30,7 @@ def parse_events(ics_text, start_of_week, end_of_week):
         dtstart = component.get("DTSTART").dt
         dtend = component.get("DTEND").dt
 
+        # Normalize to timezone
         if isinstance(dtstart, datetime.date) and not isinstance(dtstart, datetime.datetime):
             start = SG_TZ.localize(datetime.datetime.combine(dtstart, datetime.time.min))
             end = SG_TZ.localize(datetime.datetime.combine(dtend, datetime.time.min))
@@ -45,13 +46,14 @@ def parse_events(ics_text, start_of_week, end_of_week):
                 dtend = dtend.astimezone(SG_TZ)
             start, end, all_day = dtstart, dtend, False
 
+        # Handle recurrence
         if component.get("RRULE"):
             ruleset = rruleset()
             rrule_str = component.get("RRULE").to_ical().decode()
             rrule = rrulestr(rrule_str, dtstart=start)
             ruleset.rrule(rrule)
 
-            # Handle RDATE / EXDATE safely
+            # RDATE
             rdates = component.get("RDATE")
             if rdates:
                 if not isinstance(rdates, list):
@@ -61,6 +63,7 @@ def parse_events(ics_text, start_of_week, end_of_week):
                         for dt in r.dts:
                             ruleset.rdate(dt.dt)
 
+            # EXDATE
             exdates = component.get("EXDATE")
             if exdates:
                 if not isinstance(exdates, list):
@@ -101,14 +104,14 @@ def generate_html(events, start_of_week):
     if timed_events:
         earliest_hour = max(0, min(e["start"].hour for e in timed_events) - 1)
         latest_event_end = max(e["end"] for e in timed_events)
-        latest_hour = latest_event_end.hour + 1  # one hour past latest event
+        latest_hour = latest_event_end.hour + 1
     else:
         earliest_hour, latest_hour = 8, 17
 
     PIXELS_PER_MIN = 1
-    HEADER_HEIGHT = 20
+    HEADER_HEIGHT = 28
     ALL_DAY_ROW_HEIGHT = 18
-    TOP_PADDING = 6
+    TOP_PADDING = 4
 
     all_day_rows_per_day = [0] * 7
     for i in range(7):
@@ -131,9 +134,9 @@ def generate_html(events, start_of_week):
     html.append(f".hour-labels{{width:40px;display:flex;flex-direction:column;margin-top:{timed_area_offset}px;}}")
     html.append(".hour-labels div{height:60px;font-size:0.7em;text-align:right;padding-right:2px;border-bottom:1px solid #eee;}")
     html.append(".week{display:flex;flex:1;}")
-    html.append(f".day-column{{flex:1;border-left:1px solid #ccc;position:relative;margin-left:2px;min-height:{total_minutes*PIXELS_PER_MIN + timed_area_offset + 20}px;}}")
-    html.append(f".day-column-header{{text-align:center;background:#eee;font-weight:bold;border-bottom:1px solid #ccc;height:{HEADER_HEIGHT}px;line-height:{HEADER_HEIGHT}px;}}")
-    html.append(".event{position:absolute;left:2px;right:2px;background:#444;color:#fff;font-size:0.7em;padding:1px;border-radius:2px;line-height:1em;overflow:hidden;}")
+    html.append(f".day-column{{flex:1;position:relative;margin-left:2px;min-height:{total_minutes*PIXELS_PER_MIN + timed_area_offset + 20}px;}}")
+    html.append(f".day-column-header{{text-align:center;font-weight:bold;font-size:0.9em;height:{HEADER_HEIGHT}px;line-height:{HEADER_HEIGHT}px;}}")
+    html.append(".event{position:absolute;left:2px;right:2px;background:#444;color:#fff;font-size:0.75em;padding:2px;border-radius:2px;line-height:1.2em;overflow:hidden;}")
     html.append(".event .time,.event .location{font-size:0.65em;}")
     html.append(".all-day{position:absolute;left:2px;right:2px;background:#222;color:#fff;font-size:0.7em;padding:1px;border-radius:2px;overflow:hidden;}")
     html.append("</style></head><body>")
@@ -148,6 +151,8 @@ def generate_html(events, start_of_week):
     for i in range(7):
         day_date = (start_of_week + datetime.timedelta(days=i)).date()
         html.append(f'<div class="day-column"><div class="day-column-header">{days[i]} {day_date.day}</div>')
+
+        # All-day events directly below header
         idx = 0
         for e in all_day_events:
             if e["start"].date() <= day_date <= e["end"].date():
@@ -155,6 +160,7 @@ def generate_html(events, start_of_week):
                 html.append(f'<div class="all-day" style="top:{top_px}px;height:{ALL_DAY_ROW_HEIGHT}px;">{e["summary"]}</div>')
                 idx += 1
 
+        # Timed events
         for e in timed_events:
             ev_start, ev_end = e["start"], e["end"]
             if ev_start.date() <= day_date <= ev_end.date():
@@ -164,7 +170,8 @@ def generate_html(events, start_of_week):
                 minutes_duration = (seg_end - seg_start).total_seconds() / 60
                 top_px = int(timed_area_offset + minutes_from_tl * PIXELS_PER_MIN)
                 height_px = max(18, int(minutes_duration * PIXELS_PER_MIN))
-                html.append(f'<div class="event" style="top:{top_px}px;height:{height_px}px;">{e["summary"]}<br>'
+                html.append(f'<div class="event" style="top:{top_px}px;height:{height_px}px;">'
+                            f'{e["summary"]}<br>'
                             f'<span class="time">{ev_start.strftime("%H:%M")} - {ev_end.strftime("%H:%M")}</span><br>'
                             f'<span class="location">{e["location"]}</span></div>')
 
@@ -176,7 +183,6 @@ def generate_html(events, start_of_week):
 
 if __name__ == "__main__":
     now = datetime.datetime.now(SG_TZ)
-    # Show the next 7 days (not fixed to Monday)
     start_of_week = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_week = start_of_week + datetime.timedelta(days=7)
 
