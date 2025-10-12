@@ -1,51 +1,55 @@
-<!DOCTYPE html><html><head><meta charset='utf-8'>
-<title>Kobo Calendar Timetable</title>
-<style>
-body{font-family:"Monaco","Courier New",monospace;background:#fff;color:#000;margin:0;padding:0.5em;}
-.container{display:flex;width:100%;}
-.hour-labels{width:40px;display:flex;flex-direction:column;margin-top:54px;}
-.hour-labels div{height:60px;font-size:0.7em;text-align:right;padding-right:2px;border-bottom:1px solid #eee;}
-.week{display:flex;flex:1;}
-.day-column{flex:1;position:relative;margin-left:2px;}
-.day-column-header{text-align:center;font-weight:bold;font-size:1em;height:30px;line-height:30px;}
-.event{position:absolute;background:#333;color:#fff;font-size:0.8em;padding:2px;border-radius:3px;line-height:1.2em;overflow:hidden;}
-.event .time,.event .location{font-size:0.7em;}
-.all-day{position:absolute;left:2px;right:2px;background:#222;color:#fff;font-size:0.75em;padding:1px;border-radius:2px;overflow:hidden;top:30px;height:18px;}
-</style>
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Kobo Calendar</title><style>
+body{font-family:Monaco, monospace; margin:0.5em;}
+.container{display:flex; width:100%;}
+.hour-labels{width:40px; display:flex; flex-direction:column; margin-top:40px;}
+.hour-labels div{height:60px; font-size:0.7em; text-align:right; padding-right:2px;}
+.week{display:flex; flex:1;}
+.day-column{flex:1; position:relative; margin-left:2px;}
+.day-column-header{text-align:center; font-weight:bold; height:20px; line-height:20px; font-size:0.85em;}
+.event{position:absolute; left:2px; right:2px; background:#333; color:#fff; font-size:0.75em; padding:1px; border-radius:2px; line-height:1em;}
+.all-day{position:absolute; left:2px; right:2px; top:20px; background:#555; color:#fff; font-size:0.75em; padding:1px; border-radius:2px;}
+</style></head><body>
 <script>
-
-window.onload = function(){
-  let pwd = prompt("Enter password:");
-  if(pwd !== "2603"){
-    document.body.innerHTML = "<h2>Access denied.</h2>";
-  }
-};
-
-</script></head><body>
-<div class="container"><div class="hour-labels">
+if (!localStorage.getItem("kobo_pw")) {
+    var pw = prompt("Enter password:");
+    if(pw==="2603"){localStorage.setItem("kobo_pw","1");} else{document.body.innerHTML="<h1>Wrong password</h1>";}
+}
+</script>
+<div class="container">
+<div class="hour-labels">
+<div>01:00</div>
+<div>02:00</div>
+<div>03:00</div>
+<div>04:00</div>
+<div>05:00</div>
+<div>06:00</div>
+<div>07:00</div>
 <div>08:00</div>
 <div>09:00</div>
 <div>10:00</div>
 <div>11:00</div>
 <div>12:00</div>
 <div>13:00</div>
-<div>14:00</div>
-<div>15:00</div>
-<div>16:00</div>
-<div>17:00</div>
-</div><div class='week'>
+</div>
+<div class="week">
 <div class="day-column"><div class="day-column-header">Sun 12</div>
+<div class="event" style="top:40px; height:120.0px; left:0.0%; width:100.0%;">Accompany Abby for grow class<br><span class="time">01:00 - 03:00</span><br><span class="location"></span></div>
+<div class="event" style="top:280px; height:60.0px; left:0.0%; width:100.0%;">Family lunch<br><span class="time">05:00 - 06:00</span><br><span class="location">Omoté, 301 Upper Thomson Rd, #03-24A Thomson Plaza, Singapore 574408</span></div>
 </div>
 <div class="day-column"><div class="day-column-header">Mon 13</div>
 </div>
 <div class="day-column"><div class="day-column-header">Tue 14</div>
+<div class="event" style="top:610px; height:120.0px; left:0.0%; width:100.0%;">Mummy's birthday dinner<br><span class="time">10:30 - 12:30</span><br><span class="location"></span></div>
 </div>
 <div class="day-column"><div class="day-column-header">Wed 15</div>
 </div>
 <div class="day-column"><div class="day-column-header">Thu 16</div>
+<div class="event" style="top:160px; height:60.0px; left:0.0%; width:100.0%;">Sec 1 G3 review<br><span class="time">03:00 - 04:00</span><br><span class="location"></span></div>
 </div>
 <div class="day-column"><div class="day-column-header">Fri 17</div>
+<div class="event" style="top:640px; height:120.0px; left:0.0%; width:100.0%;">@JH • CG Huddle<br><span class="time">11:00 - 13:00</span><br><span class="location"></span></div>
 </div>
 <div class="day-column"><div class="day-column-header">Sat 18</div>
+<div class="all-day" style="top:20px;">Ma & Pa’s China trip</div>
 </div>
 </div></div></body></html>
