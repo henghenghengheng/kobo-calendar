@@ -1,40 +1,19 @@
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Kobo Calendar Timetable</title><style>
-body {font-family: sans-serif; background:#fff; color:#000; margin:0; padding:0.5em;}
-.container {display:flex; width:100%;}
-.hour-labels {width:40px; display:flex; flex-direction:column; margin-top:26px;}
-.hour-labels div {height:60px; font-size:0.7em; text-align:right; padding-right:2px; border-bottom:1px solid #eee;}
-.week {display:flex; flex:1;}
-.day-column {flex:1; border-left:1px solid #ccc; position:relative; margin-left:2px; min-height:3406px;}
-.day-column-header {text-align:center; background:#eee; font-weight:bold; border-bottom:1px solid #ccc; height:20px; line-height:20px;}
-.event {position:absolute; left:2px; right:2px; background:#999; color:#fff; font-size:0.7em; padding:1px; border-radius:2px; line-height:1em; overflow:hidden;}
-.event .time {font-size:0.65em;}
-.event .location {font-size:0.65em;}
-.all-day {position:absolute; left:2px; right:2px; background:#555; color:#fff; font-size:0.7em; padding:1px; border-radius:2px; overflow:hidden;}
+<!DOCTYPE html><html><head><meta charset='utf-8'>
+<title>Kobo Calendar Timetable</title>
+<style>
+body{font-family:"Courier New",monospace;background:#fff;color:#000;margin:0;padding:0.5em;}
+.container{display:flex;width:100%;}
+.hour-labels{width:40px;display:flex;flex-direction:column;margin-top:26px;}
+.hour-labels div{height:60px;font-size:0.7em;text-align:right;padding-right:2px;border-bottom:1px solid #eee;}
+.week{display:flex;flex:1;}
+.day-column{flex:1;border-left:1px solid #ccc;position:relative;margin-left:2px;min-height:886px;}
+.day-column-header{text-align:center;background:#eee;font-weight:bold;border-bottom:1px solid #ccc;height:20px;line-height:20px;}
+.event{position:absolute;left:2px;right:2px;background:#999;color:#fff;font-size:0.7em;padding:1px;border-radius:2px;line-height:1em;overflow:hidden;}
+.event .time,.event .location{font-size:0.65em;}
+.all-day{position:absolute;left:2px;right:2px;background:#555;color:#fff;font-size:0.7em;padding:1px;border-radius:2px;overflow:hidden;}
 </style></head><body>
 <div class="container">
 <div class="hour-labels">
-<div>09:00</div>
-<div>10:00</div>
-<div>11:00</div>
-<div>12:00</div>
-<div>13:00</div>
-<div>14:00</div>
-<div>15:00</div>
-<div>16:00</div>
-<div>17:00</div>
-<div>18:00</div>
-<div>19:00</div>
-<div>20:00</div>
-<div>21:00</div>
-<div>22:00</div>
-<div>23:00</div>
-<div>00:00</div>
-<div>01:00</div>
-<div>02:00</div>
-<div>03:00</div>
-<div>04:00</div>
-<div>05:00</div>
 <div>06:00</div>
 <div>07:00</div>
 <div>08:00</div>
@@ -49,45 +28,47 @@ body {font-family: sans-serif; background:#fff; color:#000; margin:0; padding:0.
 <div>17:00</div>
 <div>18:00</div>
 <div>19:00</div>
-<div>20:00</div>
-<div>21:00</div>
-<div>22:00</div>
-<div>23:00</div>
-<div>00:00</div>
-<div>01:00</div>
-<div>02:00</div>
-<div>03:00</div>
-<div>04:00</div>
-<div>05:00</div>
-<div>06:00</div>
-<div>07:00</div>
-<div>08:00</div>
-<div>09:00</div>
-<div>10:00</div>
-<div>11:00</div>
-<div>12:00</div>
-<div>13:00</div>
-<div>14:00</div>
-<div>15:00</div>
-<div>16:00</div>
 </div>
 <div class="week">
-<div class="day-column"><div class="day-column-header">Sun 12</div>
+<div class="day-column"><div class="day-column-header">Sun 6</div>
+<div class="event" style="top:116px;height:60px;">Commute to work<br><span class="time">07:30 - 08:30</span><br><span class="location"></span></div>
+<div class="event" style="top:206px;height:180px;">G3AM Meeting with DAE<br><span class="time">09:00 - 12:00</span><br><span class="location"></span></div>
+<div class="event" style="top:506px;height:90px;">Focus time<br><span class="time">14:00 - 15:30</span><br><span class="location"></span></div>
+<div class="event" style="top:626px;height:90px;">Focus time<br><span class="time">16:00 - 17:30</span><br><span class="location"></span></div>
+<div class="event" style="top:731px;height:60px;">Commute home<br><span class="time">17:45 - 18:45</span><br><span class="location"></span></div>
 </div>
-<div class="day-column"><div class="day-column-header">Mon 13</div>
+<div class="day-column"><div class="day-column-header">Mon 7</div>
+<div class="event" style="top:191px;height:90px;">Focus time<br><span class="time">08:45 - 10:15</span><br><span class="location"></span></div>
+<div class="event" style="top:296px;height:90px;">Focus time<br><span class="time">10:30 - 12:00</span><br><span class="location"></span></div>
+<div class="event" style="top:506px;height:90px;">Focus time<br><span class="time">14:00 - 15:30</span><br><span class="location"></span></div>
+<div class="event" style="top:626px;height:90px;">Focus time<br><span class="time">16:00 - 17:30</span><br><span class="location"></span></div>
 </div>
-<div class="day-column"><div class="day-column-header">Tue 14</div>
+<div class="day-column"><div class="day-column-header">Tue 8</div>
+<div class="event" style="top:116px;height:60px;">Commute to work<br><span class="time">07:30 - 08:30</span><br><span class="location"></span></div>
+<div class="event" style="top:191px;height:90px;">Focus time<br><span class="time">08:45 - 10:15</span><br><span class="location"></span></div>
+<div class="event" style="top:296px;height:90px;">Focus time<br><span class="time">10:30 - 12:00</span><br><span class="location"></span></div>
+<div class="event" style="top:506px;height:90px;">Focus time<br><span class="time">14:00 - 15:30</span><br><span class="location"></span></div>
+<div class="event" style="top:626px;height:90px;">Focus time<br><span class="time">16:00 - 17:30</span><br><span class="location"></span></div>
+<div class="event" style="top:731px;height:60px;">Commute home<br><span class="time">17:45 - 18:45</span><br><span class="location"></span></div>
 </div>
-<div class="day-column"><div class="day-column-header">Wed 15</div>
-<div class="event" style="top:26px;height:90px;">VPA CCA course discussion w Rach<br><span class="time">09:00 - 10:30</span><br><span class="location"></span></div>
+<div class="day-column"><div class="day-column-header">Wed 9</div>
+<div class="event" style="top:116px;height:60px;">Commute to work<br><span class="time">07:30 - 08:30</span><br><span class="location"></span></div>
+<div class="event" style="top:191px;height:90px;">Focus time<br><span class="time">08:45 - 10:15</span><br><span class="location"></span></div>
+<div class="event" style="top:206px;height:30px;">MEPSE LT Setting Discussion w TKGS & TJC<br><span class="time">09:00 - 09:30</span><br><span class="location"></span></div>
+<div class="event" style="top:296px;height:90px;">Focus time<br><span class="time">10:30 - 12:00</span><br><span class="location"></span></div>
+<div class="event" style="top:506px;height:90px;">Focus time<br><span class="time">14:00 - 15:30</span><br><span class="location"></span></div>
+<div class="event" style="top:626px;height:90px;">Focus time<br><span class="time">16:00 - 17:30</span><br><span class="location"></span></div>
+<div class="event" style="top:731px;height:60px;">Commute home<br><span class="time">17:45 - 18:45</span><br><span class="location"></span></div>
 </div>
-<div class="day-column"><div class="day-column-header">Thu 16</div>
+<div class="day-column"><div class="day-column-header">Thu 10</div>
+<div class="event" style="top:191px;height:90px;">Focus time<br><span class="time">08:45 - 10:15</span><br><span class="location"></span></div>
+<div class="event" style="top:266px;height:30px;">MEPSE LT Setting Discussion w CGS<br><span class="time">10:00 - 10:30</span><br><span class="location"></span></div>
+<div class="event" style="top:296px;height:90px;">Focus time<br><span class="time">10:30 - 12:00</span><br><span class="location"></span></div>
+<div class="event" style="top:506px;height:90px;">Focus time<br><span class="time">14:00 - 15:30</span><br><span class="location"></span></div>
+<div class="event" style="top:626px;height:90px;">Focus time<br><span class="time">16:00 - 17:30</span><br><span class="location"></span></div>
 </div>
-<div class="day-column"><div class="day-column-header">Fri 17</div>
-<div class="event" style="top:3236px;height:120px;">Star Champs NLC at CHS [tbc]<br><span class="time">14:30 - 16:30</span><br><span class="location"></span></div>
+<div class="day-column"><div class="day-column-header">Fri 11</div>
 </div>
-<div class="day-column"><div class="day-column-header">Sat 18</div>
+<div class="day-column"><div class="day-column-header">Sat 12</div>
 </div>
-</div>
-</div>
-</body></html>
+</div></div></body></html>
