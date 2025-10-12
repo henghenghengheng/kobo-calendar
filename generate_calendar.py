@@ -1,7 +1,7 @@
 import os
 import requests
 import datetime
-from icalendar import Calendar, Event
+from icalendar import Calendar
 from dateutil.rrule import rruleset, rrulestr
 import pytz
 
@@ -51,7 +51,7 @@ def parse_events(ics_text, start_of_week, end_of_week):
             rrule = rrulestr(rrule_str, dtstart=start)
             ruleset.rrule(rrule)
 
-            # --- FIXED handling of RDATE and EXDATE ---
+            # Handle RDATE / EXDATE safely
             rdates = component.get("RDATE")
             if rdates:
                 if not isinstance(rdates, list):
@@ -69,7 +69,6 @@ def parse_events(ics_text, start_of_week, end_of_week):
                     if hasattr(ex, "dts"):
                         for dt in ex.dts:
                             ruleset.exdate(dt.dt)
-            # -------------------------------------------
 
             for occur in ruleset.between(start_of_week, end_of_week, inc=True):
                 ev_start = occur
@@ -101,7 +100,8 @@ def generate_html(events, start_of_week):
 
     if timed_events:
         earliest_hour = max(0, min(e["start"].hour for e in timed_events) - 1)
-        latest_hour = min(23, max(e["end"].hour for e in timed_events) + 1)
+        latest_event_end = max(e["end"] for e in timed_events)
+        latest_hour = latest_event_end.hour + 1  # one hour past latest event
     else:
         earliest_hour, latest_hour = 8, 17
 
@@ -126,16 +126,16 @@ def generate_html(events, start_of_week):
     html.append("<!DOCTYPE html><html><head><meta charset='utf-8'>")
     html.append("<title>Kobo Calendar Timetable</title>")
     html.append("<style>")
-    html.append('body{font-family:"Courier New",monospace;background:#fff;color:#000;margin:0;padding:0.5em;}')
+    html.append('body{font-family:"Monaco","Courier New",monospace;background:#fff;color:#000;margin:0;padding:0.5em;}')
     html.append(".container{display:flex;width:100%;}")
     html.append(f".hour-labels{{width:40px;display:flex;flex-direction:column;margin-top:{timed_area_offset}px;}}")
     html.append(".hour-labels div{height:60px;font-size:0.7em;text-align:right;padding-right:2px;border-bottom:1px solid #eee;}")
     html.append(".week{display:flex;flex:1;}")
     html.append(f".day-column{{flex:1;border-left:1px solid #ccc;position:relative;margin-left:2px;min-height:{total_minutes*PIXELS_PER_MIN + timed_area_offset + 20}px;}}")
     html.append(f".day-column-header{{text-align:center;background:#eee;font-weight:bold;border-bottom:1px solid #ccc;height:{HEADER_HEIGHT}px;line-height:{HEADER_HEIGHT}px;}}")
-    html.append(".event{position:absolute;left:2px;right:2px;background:#999;color:#fff;font-size:0.7em;padding:1px;border-radius:2px;line-height:1em;overflow:hidden;}")
+    html.append(".event{position:absolute;left:2px;right:2px;background:#444;color:#fff;font-size:0.7em;padding:1px;border-radius:2px;line-height:1em;overflow:hidden;}")
     html.append(".event .time,.event .location{font-size:0.65em;}")
-    html.append(".all-day{position:absolute;left:2px;right:2px;background:#555;color:#fff;font-size:0.7em;padding:1px;border-radius:2px;overflow:hidden;}")
+    html.append(".all-day{position:absolute;left:2px;right:2px;background:#222;color:#fff;font-size:0.7em;padding:1px;border-radius:2px;overflow:hidden;}")
     html.append("</style></head><body>")
 
     html.append('<div class="container">')
@@ -176,8 +176,8 @@ def generate_html(events, start_of_week):
 
 if __name__ == "__main__":
     now = datetime.datetime.now(SG_TZ)
-    start_of_week = now - datetime.timedelta(days=now.weekday())
-    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Show the next 7 days (not fixed to Monday)
+    start_of_week = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_week = start_of_week + datetime.timedelta(days=7)
 
     ics_text = fetch_calendar(CALENDAR_URL)
